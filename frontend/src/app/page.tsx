@@ -1,80 +1,83 @@
 "use client";
-import React, { useEffect, useRef } from "react";
+
+import React, { useEffect, useRef, useState } from "react";
 import { FilesetResolver, HandLandmarker, DrawingUtils } from "@mediapipe/tasks-vision";
 
-export default function Page() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const handLandmarkerRef = useRef<HandLandmarker | null>(null);
+export default function HomePage() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [handLandmarker, setHandLandmarker] = useState<HandLandmarker | null>(null);
+  const [swap, setSwap] = useState(false);
 
   useEffect(() => {
-    const setup = async () => {
-      // 1. Create HandLandmarker
+    async function initMediapipe() {
       const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
       );
-      const handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      const landmarker = await HandLandmarker.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
         },
         runningMode: "VIDEO",
         numHands: 2,
       });
-      handLandmarkerRef.current = handLandmarker;
-
-      // 2. Setup Camera
-      if (videoRef.current) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
-      // 3. Setup Canvas
-      if (canvasRef.current) {
-        canvasRef.current.width = 300; // small bottom-right preview
-        canvasRef.current.height = 200;
-        ctxRef.current = canvasRef.current.getContext("2d");
-      }
-
-      // 4. Start detection loop
-      const detect = async () => {
-        if (videoRef.current && handLandmarkerRef.current && ctxRef.current) {
-          const results = await handLandmarkerRef.current.detectForVideo(videoRef.current, performance.now());
-
-          const ctx = ctxRef.current;
-          ctx.save();
-          ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
-          ctx.drawImage(videoRef.current, 0, 0, canvasRef.current!.width, canvasRef.current!.height);
-
-          // Draw stick-man style (landmarks + connections)
-          if (results.landmarks) {
-            const drawingUtils = new DrawingUtils(ctx);
-            for (const landmarks of results.landmarks) {
-              drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "#00FF00", lineWidth: 2 });
-              drawingUtils.drawLandmarks(landmarks, { color: "#FF0000", lineWidth: 1 });
-            }
-          }
-          ctx.restore();
-        }
-        requestAnimationFrame(detect);
-      };
-      detect();
-    };
-    setup();
+      setHandLandmarker(landmarker);
+    }
+    initMediapipe();
   }, []);
 
-  return (
-    <div className="relative w-screen h-screen">
-      {/* Main Fullscreen Camera Feed */}
-      <video ref={videoRef} className="w-full h-full object-cover" />
+  useEffect(() => {
+    if (!handLandmarker || !videoRef.current) return;
 
-      {/* Stick-man canvas (bottom-right corner) */}
-      <canvas
-        ref={canvasRef}
-        className="absolute bottom-4 right-4 border border-white rounded-md shadow-lg"
-      />
+    const video = videoRef.current;
+    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+      video.srcObject = stream;
+      video.play();
+
+      video.onloadeddata = () => {
+        const drawLoop = async () => {
+          if (!canvasRef.current || !videoRef.current) return; // ✅ check for null
+          const canvasCtx = canvasRef.current.getContext("2d");
+          if (!canvasCtx) return;
+
+          canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          const result = await handLandmarker.detectForVideo(video, performance.now());
+          if (result.landmarks) {
+            const drawingUtils = new DrawingUtils(canvasCtx);
+            for (const landmarks of result.landmarks) {
+              drawingUtils.drawLandmarks(landmarks, { color: "red", radius: 4 });
+              drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "blue" });
+            }
+          }
+          requestAnimationFrame(drawLoop);
+        };
+        drawLoop();
+      };
+    });
+  }, [handLandmarker]);
+
+  return (
+    <div className="relative w-screen h-screen bg-black">
+      <button
+        onClick={() => setSwap(!swap)}
+        className="absolute top-4 right-4 z-50 bg-white px-4 py-2 rounded shadow"
+      >
+        Swap
+      </button>
+
+      <div className="w-full h-full relative flex items-center justify-center">
+        <video
+          ref={videoRef}
+          className={`${swap ? "w-1/4 h-1/4 bottom-4 right-4 absolute" : "w-full h-full"}`}
+          style={{ objectFit: "cover" }}
+        />
+        <canvas
+          ref={canvasRef}
+          width={1280}
+          height={720}
+          className={`${swap ? "w-full h-full" : "w-1/4 h-1/4 bottom-4 right-4 absolute"}`}
+        />
+      </div>
     </div>
   );
 }
