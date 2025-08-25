@@ -14,6 +14,8 @@ export default function HomePage() {
 
   return (
     <div className="relative w-screen h-screen bg-black">
+
+      {/* Buttons Config */}
       <div className="flex flex-row gap-1">
         <button
           onClick={() =>
@@ -34,6 +36,7 @@ export default function HomePage() {
         </button>
       </div>
 
+      {/* Live video feed & video with landmark feed */}
       <div className="w-full h-full relative flex items-center justify-center">
         <video
           ref={videoRef}
