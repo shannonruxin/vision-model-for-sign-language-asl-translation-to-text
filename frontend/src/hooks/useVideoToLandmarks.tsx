@@ -1,4 +1,9 @@
-// src/hooks/useVideoToLandmarks.ts
+// This hook:
+// The hook’s return value (output) is LandmarksData, while the canvas drawing is a side effect.
+
+// 1. Returns only the live numeric coordinates in the shape of LandmarksData (hands: number[][][], pose: number[][]).
+// 2. Uses the passed-in canvasRef internally (page pass canvasRef as prop to hook) to draw the stickman and video frames via DrawingUtils (side effect). This hook does NOT return the canvasRef itself; the canvasRef is still in the page and rendered there.
+
 import { useEffect, useState, MutableRefObject } from "react";
 import { LandmarksData } from "@/types/index"
 import {
