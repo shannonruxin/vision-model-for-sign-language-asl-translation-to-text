@@ -1,5 +1,6 @@
 // src/hooks/useVideoToLandmarks.ts
 import { useEffect, useState, MutableRefObject } from "react";
+import { LandmarksData } from "@/types/index"
 import {
   FilesetResolver,
   HandLandmarker,
@@ -7,11 +8,6 @@ import {
   DrawingUtils,
   NormalizedLandmark,
 } from "@mediapipe/tasks-vision";
-
-export type LandmarksData = {
-  hands: number[][][]; // each hand: array of [x,y,z]
-  pose: number[][];    // pose: array of [x,y,z]
-};
 
 export function useVideoToLandmarks(
   videoRef: MutableRefObject<HTMLVideoElement | null>,

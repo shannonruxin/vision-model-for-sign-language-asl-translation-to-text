@@ -1,20 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { CoordRow, SingleLandmarkData } from "@/types/index"
 
-type CoordRow = {
-  time: string;
-  x: number;
-  y: number;
-  z: number;
-};
-
-interface LiveLandmarkCoordsDisplayProps {
-  coordinates: number[][]; // array of [x,y,z] for a single hand/pose
-  label?: string; // optional label like "hand1" or "pose"
-}
-
-export default function LiveCoordinates({ coordinates, label = "data" }: LiveLandmarkCoordsDisplayProps) {
+export default function LiveCoordinates({ coordinates, label = "data" }: SingleLandmarkData) {
   const [rows, setRows] = useState<CoordRow[]>([]);
 
   // Add new row on coordinate update
