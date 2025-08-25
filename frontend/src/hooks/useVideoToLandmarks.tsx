@@ -1,6 +1,17 @@
 // src/hooks/useVideoToLandmarks.ts
 import { useEffect, useState, MutableRefObject } from "react";
-import { FilesetResolver, HandLandmarker, PoseLandmarker, DrawingUtils } from "@mediapipe/tasks-vision";
+import {
+  FilesetResolver,
+  HandLandmarker,
+  PoseLandmarker,
+  DrawingUtils,
+  NormalizedLandmark,
+} from "@mediapipe/tasks-vision";
+
+export type LandmarksData = {
+  hands: number[][][]; // each hand: array of [x,y,z]
+  pose: number[][];    // pose: array of [x,y,z]
+};
 
 export function useVideoToLandmarks(
   videoRef: MutableRefObject<HTMLVideoElement | null>,
@@ -8,27 +19,36 @@ export function useVideoToLandmarks(
 ) {
   const [handLandmarker, setHandLandmarker] = useState<HandLandmarker | null>(null);
   const [poseLandmarker, setPoseLandmarker] = useState<PoseLandmarker | null>(null);
+  const [landmarks, setLandmarks] = useState<LandmarksData>({ hands: [], pose: [] });
+
+  // Utility to convert NormalizedLandmark[] to number[][]
+  const lmToNumbers = (lmArray: NormalizedLandmark[]): number[][] =>
+    lmArray.map((lm) => [lm.x, lm.y, lm.z]);
 
   useEffect(() => {
     (async () => {
       const vision = await FilesetResolver.forVisionTasks(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
       );
-      setHandLandmarker(await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-        },
-        runningMode: "VIDEO",
-        numHands: 2,
-      }));
-      setPoseLandmarker(await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-        },
-        runningMode: "VIDEO",
-      }));
+      setHandLandmarker(
+        await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          },
+          runningMode: "VIDEO",
+          numHands: 2,
+        })
+      );
+      setPoseLandmarker(
+        await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+          },
+          runningMode: "VIDEO",
+        })
+      );
     })();
   }, []);
 
@@ -50,21 +70,31 @@ export function useVideoToLandmarks(
           canvasRef.current.height = video.videoHeight;
           ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-          // draw video + landmarks
+          // Draw video frame
           ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
           const draw = new DrawingUtils(ctx);
 
-          const hands = await handLandmarker.detectForVideo(video, performance.now());
-          hands.landmarks?.forEach(lm => {
+          const handsResult = await handLandmarker.detectForVideo(video, performance.now());
+          const poseResult = await poseLandmarker.detectForVideo(video, performance.now());
+
+          // Draw and convert hands
+          const handsNumeric: number[][][] = [];
+          handsResult.landmarks?.forEach((lm) => {
             draw.drawLandmarks(lm, { color: "red", radius: 4 });
             draw.drawConnectors(lm, HandLandmarker.HAND_CONNECTIONS, { color: "blue" });
+            handsNumeric.push(lmToNumbers(lm));
           });
 
-          const pose = await poseLandmarker.detectForVideo(video, performance.now());
-          pose.landmarks?.forEach(lm => {
+          // Draw and convert pose
+          let poseNumeric: number[][] = [];
+          poseResult.landmarks?.forEach((lm) => {
             draw.drawLandmarks(lm, { color: "green", radius: 4 });
             draw.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: "yellow" });
+            poseNumeric = lmToNumbers(lm); // Pose usually returns one array
           });
+
+          // Update state with numeric coordinates
+          setLandmarks({ hands: handsNumeric, pose: poseNumeric });
 
           requestAnimationFrame(loop);
         };
@@ -72,4 +102,6 @@ export function useVideoToLandmarks(
       };
     });
   }, [handLandmarker, poseLandmarker]);
+
+  return landmarks; // Now you can consume live numeric coordinates
 }
